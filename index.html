@@ -1,0 +1,1139 @@
+<title>MediNet Hospital Network</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="MediNet: a smart hospital network simulator with VLANs, inter-VLAN routing, DHCP, DNS, ACL security, guest Wi-Fi and IoT ward monitoring.">
+<meta name="author" content="Kaavin Nitin Khatri">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: hospital wayfinding. A dark sign band on top, colour-coded department chips, then the simulator as a two-pane console (map on the left, log and controls on the right). */
+:root{
+  --bg:#f2f6f6; --surface:#ffffff; --surface-2:#e8eff0; --ink:#10283d; --muted:#4f6a7e; --line:#d3dee2;
+  --accent:#0b7a68; --accent-ink:#ffffff; --alert:#c23328; --warn:#9a6400; --ok:#18794a;
+  --sign:#10283d; --sign-ink:#eef4f5; --sign-muted:#9fb5c3;
+  --v10:#2d6bcf; --v20:#0b7a68; --v30:#7650bd; --v40:#b0601b; --v50:#4a5a6b; --v60:#c23328; --v99:#977200;
+  --font-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --font-body:'Atkinson Hyperlegible','Segoe UI',Arial,sans-serif;
+  --font-mono:'JetBrains Mono',Consolas,'Courier New',monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0b1820; --surface:#11232e; --surface-2:#18303d; --ink:#e2ecef; --muted:#93acb9; --line:#264352;
+  --accent:#34b89f; --accent-ink:#04201a; --alert:#f06a5e; --warn:#e2a634; --ok:#4cc27e;
+  --sign:#060f15; --sign-ink:#e2ecef; --sign-muted:#8aa3b1;
+  --v10:#6d9df0; --v20:#34b89f; --v30:#a68ae8; --v40:#e28c48; --v50:#97a8b8; --v60:#f06a5e; --v99:#d8ae2e;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1820; --surface:#11232e; --surface-2:#18303d; --ink:#e2ecef; --muted:#93acb9; --line:#264352;
+  --accent:#34b89f; --accent-ink:#04201a; --alert:#f06a5e; --warn:#e2a634; --ok:#4cc27e;
+  --sign:#060f15; --sign-ink:#e2ecef; --sign-muted:#8aa3b1;
+  --v10:#6d9df0; --v20:#34b89f; --v30:#a68ae8; --v40:#e28c48; --v50:#97a8b8; --v60:#f06a5e; --v99:#d8ae2e;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.55;margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--font-display);line-height:1.05;text-wrap:balance;margin:0}
+h2{font-size:clamp(30px,4vw,44px);font-weight:700;letter-spacing:.2px}
+h3{font-size:22px;font-weight:600}
+p{margin:0}
+code,.mono{font-family:var(--font-mono);font-size:.86em}
+a{color:var(--accent)}
+button,select{font:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* sign band */
+.sign{background:var(--sign);color:var(--sign-ink)}
+.sign .wrap{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-display);font-size:26px;font-weight:700;letter-spacing:.5px}
+.brand .cross{width:30px;height:30px;flex:none}
+.sign nav{display:flex;gap:18px;flex-wrap:wrap}
+.sign nav a{color:var(--sign-muted);text-decoration:none;font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:.6px;text-transform:uppercase}
+.sign nav a:hover{color:var(--sign-ink)}
+
+/* hero */
+.hero{padding-block:44px 28px}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:40px;align-items:end}
+.eyebrow{font-family:var(--font-mono);font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.hero h1{font-size:clamp(56px,9vw,112px);font-weight:700;letter-spacing:-1px;margin-top:8px}
+.hero h1 span{color:var(--accent)}
+.hero .lede{font-size:20px;max-width:58ch;margin-top:14px;color:var(--ink)}
+.hero .by{margin-top:18px;color:var(--muted);font-size:15px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.facts div{background:var(--surface);padding:14px 16px}
+.facts b{display:block;font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.facts span{color:var(--muted);font-size:14px}
+
+/* department chips (wayfinding) */
+.depts{display:flex;flex-wrap:wrap;gap:8px;padding-block:6px 30px}
+.chip{display:inline-flex;align-items:center;gap:8px;border-radius:4px;padding:6px 12px 6px 6px;background:var(--surface);border:1px solid var(--line);font-size:14px;font-weight:700}
+.chip i{font-style:normal;font-family:var(--font-display);font-size:16px;color:#fff;background:var(--c);border-radius:3px;padding:1px 7px;min-width:34px;text-align:center}
+
+/* simulator */
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);overflow-x:auto;background:var(--surface-2)}
+.tabs button{border:0;background:none;color:var(--muted);padding:14px 18px;font-family:var(--font-display);font-size:19px;font-weight:600;letter-spacing:.4px;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);background:var(--surface)}
+.status{display:flex;gap:10px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);font-size:14px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-weight:700;font-size:13px;border:1px solid var(--line)}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.ok{color:var(--ok)} .pill.bad{color:var(--alert)} .pill.warn{color:var(--warn)}
+.panel{padding:18px}
+.split{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px}
+.split>*{min-width:0}
+.topo-box{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
+.topo{display:block;width:100%;min-width:640px;height:auto}
+.topo .lnk{stroke:var(--muted);stroke-width:3;stroke-linecap:round;pointer-events:none}
+.topo .port,.topo .zone,.topo .zonebox,.topo .pkt,.topo .tagring,.topo .xmark{pointer-events:none}
+.topo .lnk.trunk{stroke-width:5}
+.topo .lnk.wl{stroke-dasharray:3 7}
+.topo .lnk.down{stroke:var(--alert);stroke-dasharray:6 6;opacity:.85}
+.topo .lnkhit{stroke:transparent;stroke-width:22;cursor:pointer}
+.topo .lnkhit:hover + .lnk, .topo .lnk.hover{stroke:var(--accent)}
+.topo .port{font-family:var(--font-mono);font-size:10px;fill:var(--muted)}
+.topo .node{cursor:pointer}
+.topo .node .box{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+.topo .node:hover .box,.topo .node.sel .box{stroke:var(--accent);stroke-width:2.5}
+.topo .node .ic{fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.topo .nm{font-family:var(--font-display);font-size:15px;font-weight:700;fill:var(--ink)}
+.topo .ip{font-family:var(--font-mono);font-size:10.5px;fill:var(--muted)}
+.topo .vt{font-family:var(--font-display);font-size:12px;font-weight:700;fill:#fff}
+.topo .pkt{stroke:var(--surface);stroke-width:2}
+.topo .tagring{fill:none;stroke-width:2}
+.topo .xmark{stroke:var(--alert);stroke-width:5;stroke-linecap:round}
+.topo .zone{font-family:var(--font-mono);font-size:10px;letter-spacing:1.5px;fill:var(--muted)}
+.topo .zonebox{fill:none;stroke:var(--line);stroke-dasharray:2 5}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{flex:none}
+
+.ctrl{display:grid;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.field{display:grid;gap:4px;min-width:0;flex:1 1 140px}
+.field label{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+select,input[type=range]{width:100%}
+select{padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink)}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:9px 16px;border-radius:var(--r);font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.danger{background:var(--alert);border-color:var(--alert);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:5px 10px;border-radius:999px;font-size:13px;cursor:pointer}
+.presets button:hover{border-color:var(--accent)}
+.verdict{border-radius:var(--r);padding:12px 14px;font-weight:700;border:1px solid var(--line);background:var(--surface-2)}
+.verdict.ok{border-color:var(--ok);color:var(--ok)}
+.verdict.bad{border-color:var(--alert);color:var(--alert)}
+.verdict small{display:block;font-weight:400;color:var(--ink);margin-top:4px}
+.log{list-style:none;margin:0;padding:0;max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);font-size:13.5px}
+.log li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;padding:7px 10px;border-bottom:1px solid var(--line)}
+.log li:last-child{border-bottom:0}
+.log li.cur{background:var(--surface-2)}
+.tag{font-family:var(--font-mono);font-size:11px;font-weight:600;border-radius:3px;padding:1px 4px;text-align:center;align-self:start;border:1px solid currentColor}
+.tag.L2{color:var(--v10)} .tag.L3{color:var(--v30)} .tag.ARP{color:var(--v50)} .tag.ACL{color:var(--warn)} .tag.OK{color:var(--ok)} .tag.NO{color:var(--alert)} .tag.APP{color:var(--v20)} .tag.DHCP{color:var(--v40)}
+.detail{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font-size:14px}
+.detail h4{margin:0 0 6px;font-family:var(--font-display);font-size:20px}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--font-mono);font-size:13px;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700}
+td.num,th.num{font-variant-numeric:tabular-nums;text-align:right}
+.tscroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+.vdot{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:middle}
+
+/* DHCP ladder */
+.ladder{display:grid;grid-template-columns:110px minmax(0,1fr) 110px;gap:0;align-items:center;margin-top:6px}
+.ladder .end{font-family:var(--font-display);font-weight:700;font-size:18px;text-align:center;padding:6px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.msg{grid-column:1/-1;display:grid;grid-template-columns:110px minmax(0,1fr) 110px;align-items:center;opacity:.25;transition:opacity .3s}
+.msg.on{opacity:1}
+.msg .arrow{position:relative;height:34px;display:flex;align-items:center;justify-content:center}
+.msg .arrow::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px solid var(--v40)}
+.msg .arrow b{position:relative;background:var(--surface);padding:0 8px;font-family:var(--font-mono);font-size:13px;color:var(--v40)}
+.msg.r .arrow::after{content:"";position:absolute;right:0;top:calc(50% - 6px);border:6px solid transparent;border-left:9px solid var(--v40);border-right:0}
+.msg.l .arrow::after{content:"";position:absolute;left:0;top:calc(50% - 6px);border:6px solid transparent;border-right:9px solid var(--v40);border-left:0}
+.lifeline{border-left:2px dashed var(--line);height:34px;margin:0 auto;width:0}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:12px}
+.fields .card{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;font-size:13px}
+.fields .card h5{margin:0 0 4px;font-family:var(--font-display);font-size:17px;color:var(--v40)}
+
+/* ACL matrix */
+.matrix td,.matrix th{text-align:center}
+.matrix td:first-child,.matrix th:first-child{text-align:left;white-space:nowrap}
+.cell{border:0;border-radius:4px;padding:5px 8px;font-weight:700;font-size:13px;cursor:pointer;min-width:84px}
+.cell.y{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.cell.n{background:color-mix(in srgb,var(--alert) 16%,transparent);color:var(--alert)}
+.cell.self{background:none;color:var(--muted);cursor:default}
+.acl{font-family:var(--font-mono);font-size:12.5px;border:1px solid var(--line);border-radius:var(--r);overflow:auto}
+.acl div{display:grid;grid-template-columns:32px minmax(0,1fr) 46px;gap:8px;padding:5px 10px;border-bottom:1px solid var(--line);white-space:pre}
+.acl div:last-child{border-bottom:0}
+.acl .hd{background:var(--surface-2);font-weight:600}
+.acl .hit{background:color-mix(in srgb,var(--warn) 18%,transparent)}
+.acl .c{text-align:right;color:var(--muted)}
+.switch{display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:700}
+.switch input{width:18px;height:18px;accent-color:var(--accent)}
+
+/* IoT */
+.beds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.bed{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--surface);position:relative}
+.bed.alarm{border-color:var(--alert);box-shadow:inset 4px 0 0 var(--alert)}
+.bed h5{margin:0;font-family:var(--font-display);font-size:18px;display:flex;justify-content:space-between;align-items:center}
+.vit{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:6px}
+.vit div{font-size:12px;color:var(--muted)}
+.vit b{display:block;font-family:var(--font-mono);font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+.vit .hi b{color:var(--alert)}
+.spark{display:block;width:100%;height:34px;margin-top:4px}
+.spark path{fill:none;stroke:var(--v60);stroke-width:1.6}
+.sensors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}
+.sensor{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.sensor b{font-family:var(--font-mono);font-size:20px}
+.sensor.alarm{border-color:var(--alert)}
+.events{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);font-size:13px}
+.events li{padding:7px 10px;border-bottom:1px solid var(--line)}
+.events li .t{font-family:var(--font-mono);color:var(--muted);margin-right:6px}
+.events li.bad{color:var(--alert)}
+.events li small{display:block;color:var(--muted);font-family:var(--font-mono);font-size:11.5px;overflow-wrap:anywhere}
+
+/* SPOF bars */
+.bars{display:grid;gap:6px;margin-top:8px}
+.bar{display:grid;grid-template-columns:150px minmax(0,1fr) 34px;gap:8px;align-items:center;font-size:13px}
+.bar .track{height:12px;background:var(--surface-2);border-radius:3px;overflow:hidden}
+.bar .fill{height:100%;background:var(--alert)}
+.bar .n{font-family:var(--font-mono);text-align:right}
+
+/* content sections */
+section.block{padding-block:56px}
+section.block+section.block{border-top:1px solid var(--line)}
+.sec-head{display:grid;gap:8px;margin-bottom:24px;max-width:70ch}
+.sec-head p{color:var(--muted);font-size:17px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3>*,.grid2>*{min-width:0}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:16px;background:var(--surface)}
+.card h3{margin-bottom:6px}
+.card p{color:var(--ink);font-size:15px}
+.steps{counter-reset:s;display:grid;gap:12px;list-style:none;padding:0;margin:0}
+.steps li{counter-increment:s;display:grid;grid-template-columns:40px minmax(0,1fr);gap:12px;align-items:start}
+.steps li::before{content:counter(s);font-family:var(--font-display);font-size:24px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:4px;text-align:center;line-height:36px}
+pre.code{background:var(--sign);color:var(--sign-ink);border-radius:var(--r);padding:14px 16px;overflow:auto;font-family:var(--font-mono);font-size:12.5px;line-height:1.5;margin:0;max-height:420px}
+details.cfg{border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+details.cfg summary{cursor:pointer;padding:12px 14px;font-family:var(--font-display);font-size:20px;font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:10px}
+details.cfg .inner{padding:0 14px 14px;display:grid;gap:8px}
+.copy{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r);padding:4px 10px;font-size:13px;cursor:pointer;justify-self:start}
+.team{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.member{border:1px solid var(--line);border-radius:var(--r);padding:14px;background:var(--surface);border-top:4px solid var(--c)}
+.member b{font-family:var(--font-display);font-size:21px;display:block}
+.member span{color:var(--muted);font-size:14px}
+.member p{font-size:14px;margin-top:6px}
+.cov{display:flex;flex-wrap:wrap;gap:8px}
+.cov span{border:1px solid var(--line);border-radius:4px;padding:5px 10px;font-size:14px;background:var(--surface)}
+.qa details{border-bottom:1px solid var(--line);padding:12px 0}
+.qa summary{cursor:pointer;font-weight:700;font-size:16px}
+.qa details p{margin-top:8px;color:var(--ink);max-width:75ch}
+footer{background:var(--sign);color:var(--sign-muted);font-size:14px}
+footer .wrap{padding-block:26px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+footer b{color:var(--sign-ink)}
+
+@media (max-width:960px){
+  .hero .wrap,.split{grid-template-columns:minmax(0,1fr)}
+  .beds,.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:620px){
+  .beds,.grid3,.grid2,.sensors{grid-template-columns:minmax(0,1fr)}
+  .facts b{font-size:28px}
+  .bar{grid-template-columns:110px minmax(0,1fr) 30px}
+  .ladder,.msg{grid-template-columns:76px minmax(0,1fr) 76px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="sign">
+  <div class="wrap">
+    <div class="brand">
+      <svg class="cross" viewBox="0 0 30 30" aria-hidden="true"><rect x="0" y="0" width="30" height="30" rx="5" fill="var(--accent)"/><path d="M12 6h6v6h6v6h-6v6h-6v-6H6v-6h6z" fill="var(--accent-ink)"/></svg>
+      MediNet
+    </div>
+    <nav aria-label="Sections">
+      <a href="#simulator">Simulator</a>
+      <a href="#design">Design</a>
+      <a href="#lab">Packet Tracer</a>
+      <a href="#team">Team</a>
+      <a href="#viva">Viva</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">Computer Networks · Group Project</p>
+      <h1>Medi<span>Net</span></h1>
+      <p class="lede">A smart hospital network where every department has its own VLAN, one router joins them, patient records sit behind an access list, guests get Wi-Fi that cannot see clinical systems, and ICU monitors raise alarms over the same network.</p>
+      <p class="by">Kaavin Nitin Khatri · Computer Engineering · L.J. Institute of Engineering and Technology</p>
+    </div>
+    <div class="facts" aria-label="Network at a glance">
+      <div><b>7</b><span>VLANs, one per department</span></div>
+      <div><b>9</b><span>end devices on 3 switches</span></div>
+      <div><b>6</b><span>DHCP pools on router R1</span></div>
+      <div><b>2</b><span>access lists guarding records and guests</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <div class="depts" id="depts" aria-label="Departments and VLAN numbers"></div>
+</div>
+
+<div class="wrap" id="simulator">
+  <div class="sim">
+    <div class="tabs" role="tablist" aria-label="Simulator">
+      <button role="tab" id="tab-trace" aria-selected="true" aria-controls="p-trace">Packet trace</button>
+      <button role="tab" id="tab-dhcp" aria-selected="false" aria-controls="p-dhcp">DHCP</button>
+      <button role="tab" id="tab-acl" aria-selected="false" aria-controls="p-acl">Security</button>
+      <button role="tab" id="tab-iot" aria-selected="false" aria-controls="p-iot">ICU monitoring</button>
+      <button role="tab" id="tab-fail" aria-selected="false" aria-controls="p-fail">Link failures</button>
+    </div>
+    <div class="status" id="status"></div>
+
+    <!-- PACKET TRACE -->
+    <div class="panel" id="p-trace" role="tabpanel" aria-labelledby="tab-trace">
+      <div class="split">
+        <div>
+          <div class="topo-box"><svg class="topo" id="topo1" viewBox="0 0 960 520" role="img" aria-label="Hospital network topology"></svg></div>
+          <div class="legend">
+            <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" stroke="var(--muted)" stroke-width="5"/></svg>802.1Q trunk</span>
+            <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" stroke="var(--muted)" stroke-width="3"/></svg>Access link</span>
+            <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" stroke="var(--muted)" stroke-width="3" stroke-dasharray="3 7"/></svg>Wi-Fi</span>
+            <span><svg width="16" height="16"><circle cx="8" cy="8" r="5" fill="var(--v20)"/><circle cx="8" cy="8" r="7.5" fill="none" stroke="var(--v20)" stroke-width="1.5"/></svg>Tagged frame</span>
+            <span>Click any device to see its configuration.</span>
+          </div>
+          <div class="detail" id="detail" style="margin-top:12px"></div>
+        </div>
+        <div class="ctrl">
+          <div class="row">
+            <div class="field"><label for="t-src">From</label><select id="t-src"></select></div>
+            <div class="field"><label for="t-dst">To</label><select id="t-dst"></select></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="t-proto">Traffic</label>
+              <select id="t-proto">
+                <option value="ping">Ping (ICMP echo)</option>
+                <option value="http">Open HMS website (TCP 80)</option>
+                <option value="dns">DNS lookup (UDP 53)</option>
+              </select></div>
+            <div class="field" style="flex:0 1 150px"><label for="t-speed">Speed</label><input type="range" id="t-speed" min="1" max="5" value="3"></div>
+          </div>
+          <div class="row"><button class="btn" id="t-send">Send packet</button><button class="btn ghost" id="t-clear">Clear ARP and MAC tables</button></div>
+          <div>
+            <p class="eyebrow" style="margin-bottom:6px">Demo scenarios</p>
+            <div class="presets" id="presets"></div>
+          </div>
+          <div class="verdict" id="t-verdict">Pick a source and destination, then send a packet. The log explains every hop.</div>
+          <ol class="log" id="t-log" aria-live="polite"></ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- DHCP -->
+    <div class="panel" id="p-dhcp" role="tabpanel" aria-labelledby="tab-dhcp" hidden>
+      <div class="split">
+        <div>
+          <div class="row">
+            <div class="field"><label for="d-host">Client</label><select id="d-host"></select></div>
+            <button class="btn ghost" id="d-release">Release</button>
+            <button class="btn" id="d-renew">Request address (DORA)</button>
+          </div>
+          <div class="ladder" style="margin-top:16px">
+            <div class="end" id="d-cname">Client</div><div></div><div class="end">R1</div>
+          </div>
+          <div id="d-ladder"></div>
+          <div class="verdict" id="d-verdict" style="margin-top:12px">Release a client's address, then request a new one to watch the four DHCP messages.</div>
+          <div class="fields" id="d-fields"></div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:8px">Address pools on R1</h3>
+          <div class="tscroll"><table id="d-pools"></table></div>
+          <p style="font-size:14px;color:var(--muted);margin-top:8px">Addresses .1 to .10 in each pool are excluded for the gateway and static devices. The HMS server uses the static address 192.168.50.10.</p>
+          <h3 style="margin:18px 0 8px">Current leases</h3>
+          <div class="tscroll"><table id="d-leases"></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECURITY -->
+    <div class="panel" id="p-acl" role="tabpanel" aria-labelledby="tab-acl" hidden>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div>
+          <h3>Who can reach what</h3>
+          <p style="color:var(--muted);font-size:15px">Every cell runs a real trace through the switches, the router and both access lists. Click a cell to see the deciding rule.</p>
+        </div>
+        <label class="switch"><input type="checkbox" id="a-on" checked> Access lists applied on R1</label>
+      </div>
+      <div class="tscroll"><table class="matrix" id="a-matrix"></table></div>
+      <div class="verdict" id="a-why" style="margin-top:12px">Click a cell.</div>
+      <div class="grid2" style="margin-top:16px">
+        <div><h3 style="margin-bottom:6px">GUEST_IN <span class="mono" style="font-size:14px;color:var(--muted)">in on G0/0.99</span></h3><div class="acl" id="acl-GUEST_IN"></div></div>
+        <div><h3 style="margin-bottom:6px">RECORDS_OUT <span class="mono" style="font-size:14px;color:var(--muted)">out on G0/0.40</span></h3><div class="acl" id="acl-RECORDS_OUT"></div></div>
+      </div>
+    </div>
+
+    <!-- IOT -->
+    <div class="panel" id="p-iot" role="tabpanel" aria-labelledby="tab-iot" hidden>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div>
+          <h3>ICU ward, live</h3>
+          <p style="color:var(--muted);font-size:15px">ICU-Monitor (192.168.60.12) reads six bedside monitors and three room sensors. Each alarm is sent over the network to the nurse station on the same VLAN and logged on the HMS server across the router.</p>
+        </div>
+        <div class="row">
+          <button class="btn danger" id="i-cardiac">Cardiac alarm, bed 3</button>
+          <button class="btn danger" id="i-spo2">Low oxygen, bed 5</button>
+          <button class="btn danger" id="i-smoke">Smoke in ICU store</button>
+          <button class="btn ghost" id="i-pause">Pause</button>
+        </div>
+      </div>
+      <div class="split">
+        <div>
+          <div class="beds" id="beds"></div>
+          <div class="sensors" id="sensors"></div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:8px">Alarm traffic</h3>
+          <ul class="events" id="events" aria-live="polite"></ul>
+          <p style="font-size:13px;color:var(--muted);margin-top:8px">Cut the SW-Core to SW-ICU link in the Link failures tab and raise an alarm: the nurse station still hears it, but the server log does not.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAILURES -->
+    <div class="panel" id="p-fail" role="tabpanel" aria-labelledby="tab-fail" hidden>
+      <div class="split">
+        <div>
+          <div class="topo-box"><svg class="topo" id="topo2" viewBox="0 0 960 520" role="img" aria-label="Topology with clickable links"></svg></div>
+          <div class="row" style="margin-top:10px;justify-content:space-between">
+            <p style="font-size:14px;color:var(--muted)">Click a cable to cut it. Click again to repair it.</p>
+            <button class="btn ghost" id="f-restore">Repair all links</button>
+          </div>
+          <h3 style="margin:16px 0 4px">Single points of failure</h3>
+          <p style="font-size:14px;color:var(--muted)">Devices that lose the HMS website when each cable fails on its own.</p>
+          <div class="bars" id="f-spof"></div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:8px">Reachability now</h3>
+          <div class="tscroll"><table id="f-reach"></table></div>
+          <div class="verdict" id="f-note" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section class="block" id="aim">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Aim</p>
+      <h2>Design a hospital network that is segmented, secure and easy to manage</h2>
+      <p>A hospital cannot run every computer on one flat network. Lab analysers, billing PCs, patient-record systems, visitor phones and life-support monitors have different needs, and a fault or intrusion in one place must not spread to the rest.</p>
+    </div>
+    <div class="grid3">
+      <div class="card"><h3>Segmentation</h3><p>Seven VLANs split the hospital into separate broadcast domains. Trunks between three switches carry them all over a few cables, tagged with IEEE 802.1Q.</p></div>
+      <div class="card"><h3>Central services</h3><p>Router R1 routes between VLANs on one physical port (router-on-a-stick) and hands out addresses with DHCP. The HMS server provides DNS and the hospital web portal.</p></div>
+      <div class="card"><h3>Security</h3><p>Extended access lists stop guest phones from reaching any internal system except the public portal, and keep the records VLAN closed to everyone except doctors and servers.</p></div>
+      <div class="card"><h3>Guest Wi-Fi</h3><p>A WPA2 access point puts visitor devices on VLAN 99. They get an address and internet-style web access without ever seeing clinical traffic.</p></div>
+      <div class="card"><h3>IoT monitoring</h3><p>ICU bedside monitors and room sensors report through an IoT gateway. Alarms reach the nurse station on the same VLAN in two hops and are logged on the server.</p></div>
+      <div class="card"><h3>Resilience analysis</h3><p>The simulator cuts each cable in turn and counts who loses service, which shows where a second link or a backup router would matter most.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="design">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Network design</p>
+      <h2>Addressing and VLAN plan</h2>
+      <p>Each department gets a /24 subnet named after its VLAN number, so 192.168.20.x is always the doctors. The gateway is always .1 on R1.</p>
+    </div>
+    <div class="tscroll"><table id="plan"></table></div>
+    <div class="grid2" style="margin-top:24px">
+      <div class="card">
+        <h3>How a packet crosses departments</h3>
+        <ol class="steps" style="margin-top:10px">
+          <li><p>Doctor-PC sees the server is on another subnet, so it sends the frame to its gateway 192.168.20.1 (found with ARP).</p></li>
+          <li><p>SW-Ground receives it untagged on access port Fa0/2 (VLAN 20) and forwards it up the trunk with an 802.1Q tag of 20.</p></li>
+          <li><p>R1 receives it on subinterface G0/0.20, checks any inbound access list, looks up 192.168.50.0/24 and sends it out G0/0.50 tagged 50.</p></li>
+          <li><p>SW-Core removes the tag and delivers it on access port Fa0/1 to the HMS server. The reply takes the same path back.</p></li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Switch port map</h3>
+        <div class="tscroll" style="margin-top:10px"><table id="ports"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="lab">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Cisco Packet Tracer lab</p>
+      <h2>The same network on real device models</h2>
+      <p>The Packet Tracer file MediNet.pkt contains the network shown above: a Cisco 2911 router, three 2960 switches, a server, an access point, PCs, a guest smartphone and an ICU monitor. These are the configurations loaded on each device.</p>
+    </div>
+    <div style="display:grid;gap:10px" id="cfgs"></div>
+    <div class="card" style="margin-top:16px">
+      <h3>Tests to run in Packet Tracer</h3>
+      <div class="tscroll" style="margin-top:8px"><table id="tests"></table></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="team">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Project modules</p>
+      <h2>Five parts of the network</h2>
+      <p>MediNet is organised into five modules, each built and tested on its own.</p>
+    </div>
+    <div class="team"><div class="member" style="--c:var(--v20)"><b>Network design and inter-VLAN routing</b><span>Module 1</span><p>IP and VLAN plan, router R1 subinterfaces, DHCP pools, overall integration and testing.</p></div><div class="member" style="--c:var(--v10)"><b>Switching and VLAN trunking</b><span>Module 2</span><p>VLANs on the three switches, access and trunk ports, 802.1Q tagging and MAC learning.</p></div><div class="member" style="--c:var(--v50)"><b>Servers: DNS and HMS web portal</b><span>Module 3</span><p>HMS-Server static addressing, DNS record for hms.medinet.local, the HTTP portal page.</p></div><div class="member" style="--c:var(--v99)"><b>Guest Wi-Fi and network security</b><span>Module 4</span><p>WPA2 access point, guest VLAN, extended access lists GUEST_IN and RECORDS_OUT.</p></div><div class="member" style="--c:var(--v60)"><b>ICU IoT monitoring and reliability</b><span>Module 5</span><p>ICU monitor and nurse station, alarm flow, link-failure and single-point-of-failure analysis.</p></div></div>
+    <h3 style="margin:28px 0 10px">Syllabus topics covered</h3>
+    <div class="cov">
+      <span>LAN, WAN and network topologies</span><span>Network devices: router, switch, access point</span><span>IPv4 addressing and subnetting</span><span>VLANs</span><span>IEEE 802.1Q trunking</span><span>Inter-VLAN routing</span><span>ARP</span><span>MAC address learning</span><span>DHCP (DORA)</span><span>DNS</span><span>HTTP over TCP</span><span>TCP and UDP ports</span><span>ICMP</span><span>Extended ACLs</span><span>Wireless LAN, IEEE 802.11, WPA2</span><span>IoT</span><span>Network reliability</span>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="viva">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Viva preparation</p>
+      <h2>Questions examiners ask</h2>
+    </div>
+    <div class="qa" id="qa"></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><b>MediNet</b> · Smart Hospital Network · Computer Networks group project</p>
+    <p>Kaavin Nitin Khatri · Computer Engineering · L.J. Institute of Engineering and Technology</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var SVGNS='http://www.w3.org/2000/svg';
+function sv(tag,attrs,parent){var e=document.createElementNS(SVGNS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+
+/* ---------- data ---------- */
+var VLANS={
+  10:{name:'Reception',pool:'RECEPTION'},
+  20:{name:'Doctors / OPD',pool:'DOCTORS'},
+  30:{name:'Laboratory',pool:'LAB'},
+  40:{name:'Admin & Records',pool:'ADMIN'},
+  50:{name:'Servers',pool:null},
+  60:{name:'ICU & IoT',pool:'ICU'},
+  99:{name:'Guest Wi-Fi',pool:'GUEST'}
+};
+var VIDS=[10,20,30,40,50,60,99];
+function vc(v){return 'var(--v'+v+')'}
+function net(v){return '192.168.'+v+'.0'}
+function gw(v){return '192.168.'+v+'.1'}
+var R1MAC='0001.4357.6A01';
+var DNS_IP='192.168.50.10', HMS_NAME='hms.medinet.local';
+
+var N={
+  R1:{kind:'router',name:'R1',model:'Cisco 2911 router',x:480,y:58},
+  CORE:{kind:'switch',name:'SW-Core',model:'Cisco 2960-24TT',x:480,y:190},
+  GND:{kind:'switch',name:'SW-Ground',model:'Cisco 2960-24TT',x:186,y:322},
+  ICU:{kind:'switch',name:'SW-ICU',model:'Cisco 2960-24TT',x:775,y:322},
+  AP:{kind:'ap',name:'AP-Guest',model:'AccessPoint-PT',x:480,y:322,vlan:99},
+  SRV:{kind:'server',name:'HMS-Server',model:'Server-PT',vlan:50,ip:'192.168.50.10',mac:'0060.3E5A.1010',x:290,y:190,stat:true},
+  ADM:{kind:'pc',name:'Admin-PC',model:'PC-PT',vlan:40,ip:'192.168.40.11',mac:'00D0.BA44.4011',x:670,y:190},
+  REC:{kind:'pc',name:'Reception-PC',model:'PC-PT',vlan:10,ip:'192.168.10.11',mac:'00D0.BA11.1011',x:72,y:452},
+  DOC:{kind:'pc',name:'Doctor-PC',model:'PC-PT',vlan:20,ip:'192.168.20.11',mac:'00D0.BA22.2011',x:186,y:452},
+  LAB:{kind:'pc',name:'Lab-PC',model:'PC-PT',vlan:30,ip:'192.168.30.11',mac:'00D0.BA33.3011',x:300,y:452},
+  PHN:{kind:'phone',name:'Guest-Phone',model:'Smartphone-PT',vlan:99,ip:'192.168.99.11',mac:'0090.2B99.9911',x:480,y:452},
+  NUR:{kind:'pc',name:'Nurse-Station',model:'PC-PT',vlan:60,ip:'192.168.60.11',mac:'00D0.BA66.6011',x:700,y:452},
+  MON:{kind:'iot',name:'ICU-Monitor',model:'IoT gateway (PC-PT in the lab)',vlan:60,ip:'192.168.60.12',mac:'00E0.F766.6012',x:850,y:452}
+};
+var HOSTS=['REC','DOC','LAB','ADM','SRV','NUR','MON','PHN'];
+var L=[
+  {id:'R1-CORE',a:'R1',ap:'G0/0',b:'CORE',bp:'G0/1',trunk:1},
+  {id:'CORE-SRV',a:'CORE',ap:'Fa0/1',b:'SRV',bp:'Fa0'},
+  {id:'CORE-ADM',a:'CORE',ap:'Fa0/3',b:'ADM',bp:'Fa0'},
+  {id:'CORE-AP',a:'CORE',ap:'Fa0/5',b:'AP',bp:'Port 0'},
+  {id:'CORE-GND',a:'CORE',ap:'Fa0/24',b:'GND',bp:'Fa0/24',trunk:1},
+  {id:'CORE-ICU',a:'CORE',ap:'Fa0/23',b:'ICU',bp:'Fa0/24',trunk:1},
+  {id:'GND-REC',a:'GND',ap:'Fa0/1',b:'REC',bp:'Fa0'},
+  {id:'GND-DOC',a:'GND',ap:'Fa0/2',b:'DOC',bp:'Fa0'},
+  {id:'GND-LAB',a:'GND',ap:'Fa0/3',b:'LAB',bp:'Fa0'},
+  {id:'AP-PHN',a:'AP',ap:'Wi-Fi',b:'PHN',bp:'Wireless0',wl:1},
+  {id:'ICU-NUR',a:'ICU',ap:'Fa0/1',b:'NUR',bp:'Fa0'},
+  {id:'ICU-MON',a:'ICU',ap:'Fa0/2',b:'MON',bp:'Fa0'}
+];
+var down={};           // link id -> true
+var aclOn=true;
+var arp={};            // host -> {ip:mac}
+var mac={CORE:{},GND:{},ICU:{}};
+var hits={};           // "ACL:seq" -> count
+
+function linkBetween(a,b){for(var i=0;i<L.length;i++){var l=L[i];if((l.a===a&&l.b===b)||(l.a===b&&l.b===a))return l}return null}
+function portOf(l,node){return l.a===node?l.ap:l.bp}
+function lname(l){return N[l.a].name+' – '+N[l.b].name}
+function nbrs(n){var r=[];L.forEach(function(l){if(down[l.id])return;if(l.a===n)r.push(l.b);else if(l.b===n)r.push(l.a)});return r}
+function bridging(n){var k=N[n].kind;return k==='switch'||k==='ap'}
+function l2Path(a,b){
+  var prev={},q=[a],seen={};seen[a]=1;
+  while(q.length){var c=q.shift();if(c===b)break;
+    if(c!==a&&!bridging(c))continue;
+    nbrs(c).forEach(function(x){if(!seen[x]){seen[x]=1;prev[x]=c;q.push(x)}})}
+  if(!seen[b])return null;
+  var p=[b];while(p[0]!==a)p.unshift(prev[p[0]]);return p;
+}
+
+/* ---------- IP and ACL engine ---------- */
+function ip2n(ip){return ip.split('.').reduce(function(a,o){return a*256+(+o)},0)}
+function inNet(ip,n,wild){
+  var a=ip2n(ip),b=ip2n(n),w=ip2n(wild);
+  for(var i=3;i>=0;i--){var d=Math.pow(256,i);var ai=Math.floor(a/d)%256,bi=Math.floor(b/d)%256,wi=Math.floor(w/d)%256;
+    if(((ai|wi)&255)!==((bi|wi)&255))return false}
+  return true;
+}
+var W='0.0.0.255';
+var ACLS={
+  GUEST_IN:{vlan:99,dir:'in',rules:[
+    {seq:10,act:'permit',proto:'udp',src:null,dst:null,port:67,txt:'permit udp any any eq 67'},
+    {seq:20,act:'permit',proto:'udp',src:['192.168.99.0',W],dst:[DNS_IP,'0.0.0.0'],port:53,txt:'permit udp 192.168.99.0 0.0.0.255 host 192.168.50.10 eq 53'},
+    {seq:30,act:'permit',proto:'tcp',src:['192.168.99.0',W],dst:[DNS_IP,'0.0.0.0'],port:80,txt:'permit tcp 192.168.99.0 0.0.0.255 host 192.168.50.10 eq 80'},
+    {seq:40,act:'deny',proto:'ip',src:['192.168.99.0',W],dst:['192.168.0.0','0.0.255.255'],txt:'deny ip 192.168.99.0 0.0.0.255 192.168.0.0 0.0.255.255'},
+    {seq:50,act:'permit',proto:'ip',src:null,dst:null,txt:'permit ip any any'}]},
+  RECORDS_OUT:{vlan:40,dir:'out',rules:[
+    {seq:10,act:'permit',proto:'tcp',src:null,dst:null,est:1,txt:'permit tcp any any established'},
+    {seq:20,act:'permit',proto:'icmp',src:null,dst:null,icmp:'echo-reply',txt:'permit icmp any any echo-reply'},
+    {seq:30,act:'permit',proto:'ip',src:['192.168.20.0',W],dst:null,txt:'permit ip 192.168.20.0 0.0.0.255 any'},
+    {seq:40,act:'permit',proto:'ip',src:['192.168.50.0',W],dst:null,txt:'permit ip 192.168.50.0 0.0.0.255 any'},
+    {seq:50,act:'deny',proto:'ip',src:null,dst:null,txt:'deny ip any any'}]}
+};
+function ruleMatch(r,p){
+  if(r.proto!=='ip'&&r.proto!==p.proto)return false;
+  if(r.src&&!inNet(p.src,r.src[0],r.src[1]))return false;
+  if(r.dst&&!inNet(p.dst,r.dst[0],r.dst[1]))return false;
+  if(r.port!=null&&p.dport!==r.port)return false;
+  if(r.est&&!p.est)return false;
+  if(r.icmp&&p.icmp!==r.icmp)return false;
+  return true;
+}
+function aclFor(v,dir){if(!aclOn)return null;for(var k in ACLS){if(ACLS[k].vlan===v&&ACLS[k].dir===dir)return k}return null}
+function evalAcl(name,p,count){
+  var rs=ACLS[name].rules;
+  for(var i=0;i<rs.length;i++){if(ruleMatch(rs[i],p)){if(count){var key=name+':'+rs[i].seq;hits[key]=(hits[key]||0)+1}return{act:rs[i].act,rule:rs[i]}}}
+  return{act:'deny',rule:{seq:'—',txt:'implicit deny any'}};
+}
+function pktDesc(p){
+  var s=p.proto.toUpperCase()+' '+p.src+' → '+p.dst;
+  if(p.proto==='icmp')s+=' ('+p.icmp+')';
+  if(p.dport!=null)s+=' port '+p.dport;
+  if(p.est)s+=' (reply, ACK set)';
+  return s;
+}
+
+/* ---------- trace ---------- */
+var PROTOS={
+  ping:{label:'ping',req:{proto:'icmp',icmp:'echo'},rep:{proto:'icmp',icmp:'echo-reply'}},
+  http:{label:'HTTP GET',req:{proto:'tcp',dport:80,sport:1025},rep:{proto:'tcp',sport:80,dport:1025,est:1}},
+  dns:{label:'DNS query',req:{proto:'udp',dport:53,sport:1026},rep:{proto:'udp',sport:53,dport:1026}},
+  alert:{label:'CoAP alarm',req:{proto:'udp',dport:5683,sport:5683},rep:null}
+};
+function mk(base,src,dst){var p={};for(var k in base)p[k]=base[k];p.src=src;p.dst=dst;return p}
+
+function trace(src,dst,proto,opt){
+  opt=opt||{};
+  var count=!!opt.count, learn=!opt.quiet;
+  var S=N[src],D=dst==='GW'?null:N[dst],P=PROTOS[proto];
+  var steps=[],legs=[],res={ok:false,steps:steps,legs:legs,src:src,dst:dst,proto:proto};
+  function st(t,x){steps.push({t:t,x:x})}
+  function fail(x,at,acl){st('NO',x);res.reason=x;res.failAt=at;res.acl=acl||null;return res}
+  if(!S.ip)return fail(S.name+' has no IP address. Request one with DHCP first.',src);
+  var dip=D?D.ip:gw(S.vlan);
+  if(D&&!D.ip)return fail(D.name+' has no IP address.',dst);
+  st('APP',S.name+' ('+S.ip+') → '+(D?D.name:'gateway R1')+' ('+dip+'): '+P.label+(proto==='http'||proto==='dns'?' for '+HMS_NAME:''));
+  if(proto==='http'&&learn)st('APP','Name '+HMS_NAME+' resolves to '+DNS_IP+' using the DNS service on HMS-Server.');
+  var same=!D||D.vlan===S.vlan;
+  var target=D?dst:'R1';
+  var hopMac=same?(D?D.mac:R1MAC):R1MAC;
+  var hopIp=same?dip:gw(S.vlan);
+  if(learn)arpStep(src,hopIp,hopMac,S.vlan,st);
+  if(same){
+    var p=l2Path(src,target);
+    if(!p)return fail('No layer-2 path from '+S.name+' to '+(D?D.name:'R1')+'. '+downNote(),src);
+    legs.push({nodes:p,vlan:S.vlan,smac:S.mac});describeLeg(p,S.vlan,S.mac,st,learn);
+    if(P.rep){legs.push({nodes:p.slice().reverse(),vlan:S.vlan,smac:D?D.mac:R1MAC,rep:1});
+      st('L2','Reply returns the same way inside VLAN '+S.vlan+'. No router is involved because both ends are in '+net(S.vlan)+'/24.')}
+    st('OK',(P.rep?'Reply received. ':'Delivered. ')+(D?D.name:'R1')+' is reachable.');res.ok=true;return res;
+  }
+  var p1=l2Path(src,'R1');
+  if(!p1)return fail('No path from '+S.name+' to its gateway R1. '+downNote(),src);
+  legs.push({nodes:p1,vlan:S.vlan,smac:S.mac});describeLeg(p1,S.vlan,S.mac,st,learn);
+  var req=mk(P.req,S.ip,dip);
+  var a=aclFor(S.vlan,'in');
+  if(a){var r=evalAcl(a,req,count);st('ACL',a+' (in on G0/0.'+S.vlan+') line '+r.rule.seq+': '+r.rule.txt+' → '+r.act.toUpperCase());
+    if(r.act==='deny')return fail('Dropped by R1. '+a+' line '+r.rule.seq+' denies '+pktDesc(req)+'.','R1',{name:a,seq:r.rule.seq});}
+  st('L3','R1 routes '+dip+': connected network '+net(D.vlan)+'/24 on G0/0.'+D.vlan+'. TTL 128 → 127, new frame from '+R1MAC+' tagged VLAN '+D.vlan+'.');
+  a=aclFor(D.vlan,'out');
+  if(a){var r2=evalAcl(a,req,count);st('ACL',a+' (out on G0/0.'+D.vlan+') line '+r2.rule.seq+': '+r2.rule.txt+' → '+r2.act.toUpperCase());
+    if(r2.act==='deny')return fail('Dropped by R1. '+a+' line '+r2.rule.seq+' denies '+pktDesc(req)+'.','R1',{name:a,seq:r2.rule.seq});}
+  var p2=l2Path('R1',dst);
+  if(!p2)return fail('R1 cannot reach '+D.name+'. '+downNote(),'R1');
+  if(learn)arpStep('R1',dip,D.mac,D.vlan,st);
+  legs.push({nodes:p2,vlan:D.vlan,smac:R1MAC});describeLeg(p2,D.vlan,R1MAC,st,learn);
+  if(!P.rep){st('OK','Delivered to '+D.name+'.');res.ok=true;return res}
+  var rep=mk(P.rep,dip,S.ip);
+  a=aclFor(D.vlan,'in');
+  if(a){var r3=evalAcl(a,rep,count);st('ACL','Reply: '+a+' (in on G0/0.'+D.vlan+') line '+r3.rule.seq+': '+r3.rule.txt+' → '+r3.act.toUpperCase());
+    if(r3.act==='deny'){legs.push({nodes:p2.slice().reverse(),vlan:D.vlan,smac:D.mac,rep:1});return fail('Request arrived but the reply was dropped. '+a+' line '+r3.rule.seq+' denies '+pktDesc(rep)+'.','R1',{name:a,seq:r3.rule.seq})}}
+  a=aclFor(S.vlan,'out');
+  if(a){var r4=evalAcl(a,rep,count);st('ACL','Reply: '+a+' (out on G0/0.'+S.vlan+') line '+r4.rule.seq+': '+r4.rule.txt+' → '+r4.act.toUpperCase());
+    if(r4.act==='deny'){legs.push({nodes:p2.slice().reverse(),vlan:D.vlan,smac:D.mac,rep:1});return fail('Request arrived but the reply was dropped. '+a+' line '+r4.rule.seq+' denies '+pktDesc(rep)+'.','R1',{name:a,seq:r4.rule.seq})}}
+  legs.push({nodes:p2.slice().reverse(),vlan:D.vlan,smac:D.mac,rep:1});
+  legs.push({nodes:p1.slice().reverse(),vlan:S.vlan,smac:R1MAC,rep:1});
+  st('L3','Reply routed back by R1 from VLAN '+D.vlan+' to VLAN '+S.vlan+'.');
+  var okmsg={ping:'Reply from '+dip+': bytes=32 time<1ms TTL=127',http:'HTTP 200 OK. The HMS portal page loads on '+S.name+'.',dns:HMS_NAME+' → '+DNS_IP+' (answer from HMS-Server).'}[proto];
+  st('OK',okmsg);res.ok=true;return res;
+}
+function downNote(){var d=L.filter(function(l){return down[l.id]}).map(lname);return d.length?'Cut cable'+(d.length>1?'s':'')+': '+d.join(', ')+'.':''}
+function arpStep(h,ip,m,v,st){
+  arp[h]=arp[h]||{};
+  if(arp[h][ip]){st('ARP',N[h].name+' already has '+ip+' → '+m+' in its ARP cache.');return}
+  arp[h][ip]=m;
+  st('ARP',N[h].name+' broadcasts "Who has '+ip+'?" to FFFF.FFFF.FFFF in VLAN '+v+'. Reply: '+ip+' is at '+m+'.');
+}
+function describeLeg(p,v,smac,st,learn){
+  for(var i=0;i<p.length-1;i++){
+    var a=p[i],b=p[i+1],l=linkBetween(a,b);
+    var how=l.trunk?'802.1Q trunk, tag '+v:(l.wl?'Wi-Fi (802.11, WPA2)':'access port, untagged');
+    st('L2',N[a].name+' '+portOf(l,a)+' → '+N[b].name+' '+portOf(l,b)+' · '+how);
+    if(learn&&mac[b]){var t=mac[b];if(!t[smac]||t[smac].port!==portOf(l,b)){t[smac]={port:portOf(l,b),vlan:v};st('L2',N[b].name+' learns '+smac+' on '+portOf(l,b)+' (VLAN '+v+').')}}
+  }
+}
+
+/* ---------- topology drawing ---------- */
+var ICONS={
+  router:function(g){sv('circle',{cx:0,cy:-6,r:15,class:'ic'},g);sv('path',{d:'M-9 -6h18M-9 -6l4 -4M-9 -6l4 4M9 -6l-4 -4M9 -6l-4 4',class:'ic'},g)},
+  switch:function(g){sv('rect',{x:-19,y:-17,width:38,height:22,rx:3,class:'ic'},g);sv('path',{d:'M-11 -10h20l-4 -3M11 -2h-20l4 3',class:'ic'},g)},
+  server:function(g){sv('rect',{x:-11,y:-21,width:22,height:30,rx:2,class:'ic'},g);sv('path',{d:'M-6 -14h12M-6 -8h12M-6 -2h12',class:'ic'},g)},
+  pc:function(g){sv('rect',{x:-16,y:-20,width:32,height:21,rx:2,class:'ic'},g);sv('path',{d:'M0 1v5M-8 7h16',class:'ic'},g)},
+  phone:function(g){sv('rect',{x:-9,y:-22,width:18,height:30,rx:3,class:'ic'},g);sv('path',{d:'M-3 4h6',class:'ic'},g)},
+  ap:function(g){sv('path',{d:'M-14 -12a20 20 0 0 1 28 0M-9 -7a13 13 0 0 1 18 0M-4 -2a6 6 0 0 1 8 0',class:'ic'},g);sv('circle',{cx:0,cy:3,r:2.5,class:'ic'},g)},
+  iot:function(g){sv('rect',{x:-17,y:-19,width:34,height:24,rx:3,class:'ic'},g);sv('path',{d:'M-13 -7h7l3 -6l4 12l3 -6h9',class:'ic'},g)}
+};
+var topos=[];
+function drawTopo(svg,mode){
+  svg.innerHTML='';
+  // floor zones
+  var z=[['GROUND FLOOR · OPD',12,268,348,242],['SERVER ROOM · ADMIN',220,130,520,116],['ICU WING',624,268,324,242]];
+  z.forEach(function(q){sv('rect',{x:q[1],y:q[2],width:q[3],height:q[4],rx:8,class:'zonebox'},svg);var t=sv('text',{x:q[1]+10,y:q[2]+16,class:'zone'},svg);t.textContent=q[0]});
+  var gl=sv('g',{},svg),gn=sv('g',{},svg),gp=sv('g',{},svg);
+  var lines={};
+  L.forEach(function(l){
+    var A=N[l.a],B=N[l.b];
+    var hit=sv('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,class:'lnkhit'},gl);
+    var ln=sv('line',{x1:A.x,y1:A.y,x2:B.x,y2:B.y,class:'lnk'+(l.trunk?' trunk':'')+(l.wl?' wl':'')},gl);
+    var t=sv('title',{},hit);t.textContent=lname(l)+(mode==='fail'?' (click to cut or repair)':'');
+    lines[l.id]=ln;
+    [[A,B,l.ap],[B,A,l.bp]].forEach(function(e){var dx=e[1].x-e[0].x,dy=e[1].y-e[0].y,len=Math.sqrt(dx*dx+dy*dy),f=Math.min(.45,(Math.abs(dy)>Math.abs(dx)?50:66)/len),x=e[0].x+dx*f,y=e[0].y+dy*f;
+      var tt=sv('text',{x:x+6,y:y-4,class:'port'},gl);tt.textContent=e[2]});
+    if(mode==='fail'){hit.addEventListener('click',function(){down[l.id]=!down[l.id];refreshAll()});
+      hit.addEventListener('mouseenter',function(){ln.classList.add('hover')});hit.addEventListener('mouseleave',function(){ln.classList.remove('hover')})}
+  });
+  var nodes={};
+  Object.keys(N).forEach(function(id){
+    var n=N[id],g=sv('g',{class:'node',transform:'translate('+n.x+','+n.y+')',tabindex:0,role:'button','aria-label':n.name},gn);
+    sv('rect',{x:-52,y:-36,width:104,height:76,rx:7,class:'box'},g);
+    ICONS[n.kind](g);
+    if(n.vlan){sv('rect',{x:26,y:-32,width:22,height:15,rx:3,fill:vc(n.vlan)},g);var vt=sv('text',{x:37,y:-20.5,'text-anchor':'middle',class:'vt'},g);vt.textContent=n.vlan}
+    var nm=sv('text',{x:0,y:23,'text-anchor':'middle',class:'nm'},g);nm.textContent=n.name;
+    var ip=sv('text',{x:0,y:35,'text-anchor':'middle',class:'ip'},g);ip.textContent=n.ip||(n.kind==='router'?'G0/0.10–.99':n.kind==='ap'?'SSID MediNet-Guest':'');
+    n.kind!=='router'&&n.kind!=='switch'&&n.kind!=='ap'&&(g._ip=ip);
+    nodes[id]=g;
+    if(mode==='trace'){var go=function(){selectNode(id)};g.addEventListener('click',go);g.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})}
+  });
+  var T={svg:svg,lines:lines,nodes:nodes,gp:gp,mode:mode};topos.push(T);return T;
+}
+function refreshTopo(T){
+  L.forEach(function(l){T.lines[l.id].classList.toggle('down',!!down[l.id])});
+  Object.keys(T.nodes).forEach(function(id){var g=T.nodes[id];if(g._ip)g._ip.textContent=N[id].ip||'no address'});
+}
+
+/* ---------- packet animation ---------- */
+var anim=null;
+function speedMs(){return [0,900,650,430,260,140][+$('#t-speed').value]}
+var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function animate(T,res,onStep,done){
+  if(anim)anim.cancel=true;
+  var me={cancel:false};anim=me;T.gp.innerHTML='';
+  var segs=[];res.legs.forEach(function(lg){for(var i=0;i<lg.nodes.length-1;i++){var l=linkBetween(lg.nodes[i],lg.nodes[i+1]);segs.push({a:N[lg.nodes[i]],b:N[lg.nodes[i+1]],v:lg.vlan,tag:!!l.trunk,rep:lg.rep})}});
+  var dot=sv('circle',{r:8,class:'pkt'},T.gp),ring=sv('circle',{r:12,class:'tagring'},T.gp);
+  var i=0;
+  function fin(){
+    if(!res.ok){var f=N[res.failAt]||N[res.src];var x=f.x+52,y=f.y-36;sv('path',{d:'M'+(x-9)+' '+(y-9)+'l18 18M'+(x+9)+' '+(y-9)+'l-18 18',class:'xmark'},T.gp)}
+    dot.remove();ring.remove();done&&done();
+  }
+  if(!segs.length||reduced){if(segs.length){var s=segs[segs.length-1];}fin();return}
+  function run(){
+    if(me.cancel)return;
+    if(i>=segs.length){fin();return}
+    var s=segs[i],t0=null,d=speedMs();
+    dot.setAttribute('fill',vc(s.v));ring.setAttribute('stroke',vc(s.v));ring.style.display=s.tag?'':'none';
+    dot.setAttribute('opacity',s.rep?.7:1);
+    onStep&&onStep(i,segs.length);
+    function fr(ts){if(me.cancel)return;if(t0==null)t0=ts;var k=Math.min(1,(ts-t0)/d);
+      var x=s.a.x+(s.b.x-s.a.x)*k,y=s.a.y+(s.b.y-s.a.y)*k;dot.setAttribute('cx',x);dot.setAttribute('cy',y);ring.setAttribute('cx',x);ring.setAttribute('cy',y);
+      if(k<1)requestAnimationFrame(fr);else{i++;run()}}
+    requestAnimationFrame(fr);
+  }
+  run();
+}
+
+/* ---------- UI: status, depts ---------- */
+function renderDepts(){
+  $('#depts').innerHTML=VIDS.map(function(v){return '<span class="chip" style="--c:'+vc(v)+'"><i>'+v+'</i>'+esc(VLANS[v].name)+'</span>'}).join('');
+}
+function renderStatus(){
+  var d=L.filter(function(l){return down[l.id]});
+  var noip=HOSTS.filter(function(h){return !N[h].ip});
+  var s='<span class="pill '+(d.length?'bad':'ok')+'">'+(d.length?d.length+' cable'+(d.length>1?'s':'')+' cut':'All links up')+'</span>';
+  s+='<span class="pill '+(aclOn?'ok':'warn')+'">'+(aclOn?'Access lists on':'Access lists off')+'</span>';
+  s+='<span class="pill '+(noip.length?'warn':'ok')+'">'+(noip.length?noip.length+' device'+(noip.length>1?'s':'')+' without an address':'All devices addressed')+'</span>';
+  $('#status').innerHTML=s;
+}
+function refreshAll(){topos.forEach(refreshTopo);renderStatus();renderMatrix();renderReach();renderLeases();renderPools()}
+
+/* ---------- Trace tab ---------- */
+var T1;
+function hostOptions(sel,list){sel.innerHTML=list.map(function(h){return '<option value="'+h+'">'+esc(N[h].name)+' · VLAN '+N[h].vlan+'</option>'}).join('')}
+function setupTrace(){
+  T1=drawTopo($('#topo1'),'trace');
+  hostOptions($('#t-src'),HOSTS);hostOptions($('#t-dst'),HOSTS);
+  $('#t-dst').insertAdjacentHTML('afterbegin','<option value="GW">Own gateway (R1)</option>');
+  $('#t-src').value='DOC';$('#t-dst').value='SRV';
+  $('#t-proto').addEventListener('change',syncProto);
+  $('#t-send').addEventListener('click',function(){runTrace($('#t-src').value,$('#t-dst').value,$('#t-proto').value)});
+  $('#t-clear').addEventListener('click',function(){arp={};mac={CORE:{},GND:{},ICU:{}};$('#t-verdict').className='verdict';$('#t-verdict').textContent='ARP caches and switch MAC tables cleared. The next packet will ARP and switches will learn again.';$('#t-log').innerHTML='';if(selected)selectNode(selected)});
+  var pre=[
+    ['Doctor opens HMS website','DOC','SRV','http'],
+    ['Guest opens HMS website','PHN','SRV','http'],
+    ['Guest pings Records PC','PHN','ADM','ping'],
+    ['Reception pings Records PC','REC','ADM','ping'],
+    ['Doctor pings Records PC','DOC','ADM','ping'],
+    ['Nurse pings ICU monitor','NUR','MON','ping'],
+    ['Lab looks up hms.medinet.local','LAB','SRV','dns']
+  ];
+  $('#presets').innerHTML=pre.map(function(p,i){return '<button data-i="'+i+'">'+esc(p[0])+'</button>'}).join('');
+  $('#presets').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;var p=pre[+b.dataset.i];$('#t-src').value=p[1];$('#t-proto').value=p[3];syncProto();$('#t-dst').value=p[2];runTrace(p[1],p[2],p[3])});
+  selectNode('R1');
+}
+function syncProto(){var pr=$('#t-proto').value;var d=$('#t-dst');if(pr!=='ping'){d.value='SRV';d.disabled=true}else d.disabled=false}
+function runTrace(s,d,pr){
+  if(s===d){$('#t-verdict').className='verdict bad';$('#t-verdict').textContent='Pick two different devices.';return}
+  var res=trace(s,d,pr,{count:true});
+  var log=$('#t-log');log.innerHTML=res.steps.map(function(x){return '<li><span class="tag '+x.t+'">'+x.t+'</span><span>'+esc(x.x)+'</span></li>'}).join('');
+  var v=$('#t-verdict');v.className='verdict';v.innerHTML='Sending…';
+  $('#t-send').disabled=true;
+  animate(T1,res,null,function(){
+    $('#t-send').disabled=false;
+    v.className='verdict '+(res.ok?'ok':'bad');
+    v.innerHTML=res.ok?'Delivered<small>'+esc(res.steps[res.steps.length-1].x)+'</small>':'Blocked<small>'+esc(res.reason)+'</small>';
+    renderAcls();if(selected)selectNode(selected);
+  });
+}
+var selected=null;
+function selectNode(id){
+  selected=id;
+  Object.keys(T1.nodes).forEach(function(k){T1.nodes[k].classList.toggle('sel',k===id)});
+  var n=N[id],h='<h4>'+esc(n.name)+' <span class="mono" style="font-size:13px;color:var(--muted)">'+esc(n.model)+'</span></h4>';
+  if(n.kind==='router'){
+    h+='<div class="tscroll"><table><tr><th>Subinterface</th><th>802.1Q</th><th>Address</th><th>ACL</th></tr>'+VIDS.map(function(v){var ai=aclFor(v,'in'),ao=aclFor(v,'out');return '<tr><td class="mono">G0/0.'+v+'</td><td><span class="vdot" style="--c:'+vc(v)+'"></span>'+v+'</td><td class="mono">'+gw(v)+'/24</td><td class="mono">'+(ai?ai+' in':ao?ao+' out':'—')+'</td></tr>'}).join('')+'</table></div>';
+    h+='<p style="font-size:13px;color:var(--muted);margin-top:6px">One physical port carries all seven VLANs (router-on-a-stick). R1 is also the DHCP server for six pools.</p>';
+  }else if(n.kind==='switch'){
+    var rows=L.filter(function(l){return l.a===id||l.b===id}).map(function(l){var o=l.a===id?l.b:l.a;return '<tr><td class="mono">'+portOf(l,id)+'</td><td>'+(l.trunk?'Trunk (all VLANs)':'Access VLAN '+(N[o].vlan||''))+'</td><td>'+esc(N[o].name)+'</td></tr>'}).join('');
+    h+='<div class="tscroll"><table><tr><th>Port</th><th>Mode</th><th>Connected to</th></tr>'+rows+'</table></div>';
+    var mt=mac[id],keys=Object.keys(mt);
+    h+='<p style="font-size:13px;font-weight:700;margin:10px 0 4px">MAC address table</p>'+(keys.length?'<div class="tscroll"><table><tr><th>VLAN</th><th>MAC</th><th>Port</th></tr>'+keys.map(function(k){return '<tr><td>'+mt[k].vlan+'</td><td class="mono">'+k+'</td><td class="mono">'+mt[k].port+'</td></tr>'}).join('')+'</table></div>':'<p style="font-size:13px;color:var(--muted)">Empty. Send a packet and the switch learns source addresses.</p>');
+  }else if(n.kind==='ap'){
+    h+='<dl class="kv"><dt>SSID</dt><dd>MediNet-Guest</dd><dt>Security</dt><dd>WPA2-PSK (AES)</dd><dt>Uplink</dt><dd>SW-Core Fa0/5, access VLAN 99</dd><dt>Clients</dt><dd>Guest-Phone</dd></dl>';
+  }else{
+    var l=L.filter(function(x){return x.a===id||x.b===id})[0],o=l.a===id?l.b:l.a;
+    h+='<dl class="kv"><dt>VLAN</dt><dd>'+n.vlan+' · '+esc(VLANS[n.vlan].name)+'</dd><dt>IPv4</dt><dd>'+(n.ip||'none')+(n.stat?' (static)':' (DHCP)')+'</dd><dt>Mask</dt><dd>255.255.255.0</dd><dt>Gateway</dt><dd>'+gw(n.vlan)+'</dd><dt>DNS</dt><dd>'+DNS_IP+'</dd><dt>MAC</dt><dd>'+n.mac+'</dd><dt>Connected</dt><dd>'+esc(N[o].name)+' '+portOf(l,o)+'</dd>';
+    var c=arp[id]?Object.keys(arp[id]):[];
+    h+='<dt>ARP cache</dt><dd>'+(c.length?c.map(function(k){return k+' → '+arp[id][k]}).join('<br>'):'empty')+'</dd></dl>';
+    if(id==='SRV')h+='<p style="font-size:13px;color:var(--muted);margin-top:6px">Services: DNS (A record '+HMS_NAME+' → '+DNS_IP+'), HTTP (HMS portal).</p>';
+  }
+  $('#detail').innerHTML=h;
+}
+
+/* ---------- DHCP tab ---------- */
+var DH=['REC','DOC','LAB','ADM','NUR','MON','PHN'];
+function setupDhcp(){
+  hostOptions($('#d-host'),DH);$('#d-host').value='DOC';
+  $('#d-host').addEventListener('change',function(){$('#d-cname').textContent=N[$('#d-host').value].name});
+  $('#d-cname').textContent='Doctor-PC';
+  $('#d-release').addEventListener('click',function(){var h=$('#d-host').value;var old=N[h].ip;N[h].ip=null;arp[h]={};
+    $('#d-verdict').className='verdict';$('#d-verdict').innerHTML=old?N[h].name+' sent DHCPRELEASE for '+old+'. It now has no address.':N[h].name+' had no address.';
+    $('#d-ladder').innerHTML='';$('#d-fields').innerHTML='';refreshAll()});
+  $('#d-renew').addEventListener('click',function(){dora($('#d-host').value)});
+}
+function freeIp(v,h){
+  var used={};HOSTS.forEach(function(k){if(k!==h&&N[k].ip&&N[k].vlan===v)used[N[k].ip]=1});
+  for(var i=11;i<255;i++){var ip='192.168.'+v+'.'+i;if(!used[ip])return ip}return null;
+}
+function xid(){return '0x'+Math.floor(Math.random()*0xffffffff).toString(16).toUpperCase().padStart(8,'0')}
+function dora(h){
+  var n=N[h],v=n.vlan,x=xid(),path=l2Path(h,'R1');
+  var msgs=[['DHCPDISCOVER','r'],['DHCPOFFER','l'],['DHCPREQUEST','r'],['DHCPACK','l']];
+  $('#d-ladder').innerHTML=msgs.map(function(m){return '<div class="msg '+m[1]+'"><div class="lifeline"></div><div class="arrow"><b>'+m[0]+'</b></div><div class="lifeline"></div></div>'}).join('');
+  var el=$('#d-ladder').children,fields=$('#d-fields'),vd=$('#d-verdict');fields.innerHTML='';
+  var offer=freeIp(v,h);
+  var cards=[
+    ['Discover','Client '+n.mac+' → FFFF.FFFF.FFFF<br>0.0.0.0:68 → 255.255.255.255:67<br>Transaction '+x+'<br>Flooded in VLAN '+v+(path&&path.length>2?', tagged '+v+' on trunks':'')],
+    ['Offer','R1 G0/0.'+v+' ('+gw(v)+':67) → client:68<br>Your IP: '+offer+'<br>Mask 255.255.255.0 · Router '+gw(v)+'<br>DNS '+DNS_IP+' · Lease 86400 s'],
+    ['Request','0.0.0.0 → 255.255.255.255<br>Requested IP '+offer+'<br>Server identifier '+gw(v)+'<br>Broadcast so other servers withdraw offers'],
+    ['Acknowledge','R1 commits the binding '+offer+' ↔ '+n.mac+'<br>Pool '+VLANS[v].pool+'<br>Client configures '+offer+'/24, gateway '+gw(v)]
+  ];
+  if(!path){
+    el[0].classList.add('on');vd.className='verdict bad';
+    vd.innerHTML='No DHCPOFFER received<small>The discover never reached R1. '+esc(downNote())+' Windows would fall back to an APIPA address 169.254.x.x and the device could not reach anything.</small>';
+    fields.innerHTML='<div class="card"><h5>Discover</h5>'+cards[0][1]+'</div>';n.ip=null;refreshAll();return;
+  }
+  var gi='';if(aclOn&&v===99){var r=evalAcl('GUEST_IN',{proto:'udp',src:'0.0.0.0',dst:'255.255.255.255',dport:67},true);gi='GUEST_IN line '+r.rule.seq+' ('+r.rule.txt+') lets the discover in on G0/0.99. '}
+  var k=0,step=reduced?0:550;$('#d-renew').disabled=true;
+  (function nx(){
+    el[k].classList.add('on');fields.insertAdjacentHTML('beforeend','<div class="card"><h5>'+cards[k][0]+'</h5>'+cards[k][1]+'</div>');
+    k++;if(k<4){setTimeout(nx,step);return}
+    n.ip=offer;arp[h]={};$('#d-renew').disabled=false;
+    vd.className='verdict ok';vd.innerHTML=n.name+' is now '+offer+'<small>'+esc(gi)+'Router R1 is the DHCP server for every VLAN because it has an interface in each one, so no relay (ip helper-address) is needed.</small>';
+    refreshAll();renderAcls();
+  })();
+}
+function renderPools(){
+  var rows='<tr><th>Pool</th><th>VLAN</th><th>Network</th><th>Gateway</th><th class="num">Leased</th></tr>';
+  VIDS.forEach(function(v){if(!VLANS[v].pool)return;var c=HOSTS.filter(function(h){return N[h].vlan===v&&N[h].ip&&!N[h].stat}).length;
+    rows+='<tr><td class="mono">'+VLANS[v].pool+'</td><td><span class="vdot" style="--c:'+vc(v)+'"></span>'+v+'</td><td class="mono">'+net(v)+'/24</td><td class="mono">'+gw(v)+'</td><td class="num">'+c+' / 244</td></tr>'});
+  $('#d-pools').innerHTML=rows;
+}
+function renderLeases(){
+  var rows='<tr><th>Device</th><th>IP address</th><th>MAC</th></tr>';
+  DH.forEach(function(h){rows+='<tr><td>'+esc(N[h].name)+'</td><td class="mono">'+(N[h].ip||'<span style="color:var(--alert)">none</span>')+'</td><td class="mono">'+N[h].mac+'</td></tr>'});
+  $('#d-leases').innerHTML=rows;
+}
+
+/* ---------- Security tab ---------- */
+var COLS=[['Open HMS website','SRV','http'],['DNS lookup','SRV','dns'],['Ping HMS server','SRV','ping'],['Reach Records PC','ADM','ping'],['Ping Doctor PC','DOC','ping'],['Ping nurse station','NUR','ping']];
+var ROWS=['REC','DOC','LAB','ADM','NUR','PHN'];
+var lastCell=null;
+function renderMatrix(){
+  var h='<tr><th>From</th>'+COLS.map(function(c){return '<th>'+esc(c[0])+'</th>'}).join('')+'</tr>';
+  ROWS.forEach(function(r){
+    h+='<tr><td><span class="vdot" style="--c:'+vc(N[r].vlan)+'"></span>'+esc(N[r].name)+'</td>';
+    COLS.forEach(function(c,ci){
+      if(c[1]===r){h+='<td><span class="cell self">—</span></td>';return}
+      var res=trace(r,c[1],c[2],{quiet:true});
+      h+='<td><button class="cell '+(res.ok?'y':'n')+'" data-r="'+r+'" data-c="'+ci+'">'+(res.ok?'Allowed':'Blocked')+'</button></td>';
+    });h+='</tr>';
+  });
+  $('#a-matrix').innerHTML=h;
+  if(lastCell)explain(lastCell[0],lastCell[1]);
+}
+function explain(r,ci){
+  lastCell=[r,ci];var c=COLS[ci],res=trace(r,c[1],c[2],{quiet:true});
+  var acl=res.steps.filter(function(s){return s.t==='ACL'}).map(function(s){return s.x});
+  var w=$('#a-why');w.className='verdict '+(res.ok?'ok':'bad');
+  w.innerHTML=esc(N[r].name)+' → '+esc(c[0])+': '+(res.ok?'allowed':'blocked')+'<small>'+(res.ok?(acl.length?esc(acl.join(' · ')):'No access list is in the path, so R1 routes it normally.'):esc(res.reason))+'</small>';
+  renderAcls(res.acl);
+}
+function renderAcls(hl){
+  Object.keys(ACLS).forEach(function(k){
+    var a=ACLS[k],box=$('#acl-'+k);
+    box.innerHTML='<div class="hd"><span>Seq</span><span>Rule</span><span class="c">Hits</span></div>'+a.rules.map(function(r){var on=hl&&hl.name===k&&hl.seq===r.seq;return '<div class="'+(on?'hit':'')+'"><span>'+r.seq+'</span><span>'+esc(r.txt)+'</span><span class="c">'+(hits[k+':'+r.seq]||0)+'</span></div>'}).join('');
+    box.style.opacity=aclOn?1:.45;
+  });
+}
+function setupAcl(){
+  $('#a-on').addEventListener('change',function(e){aclOn=e.target.checked;refreshAll();renderAcls();if(selected)selectNode(selected)});
+  $('#a-matrix').addEventListener('click',function(e){var b=e.target.closest('button.cell');if(!b)return;var r=b.dataset.r,ci=+b.dataset.c;explain(r,ci);var c=COLS[ci];trace(r,c[1],c[2],{quiet:true,count:true});renderAcls(lastAclHL(r,ci))});
+  renderAcls();
+}
+function lastAclHL(r,ci){var c=COLS[ci];return trace(r,c[1],c[2],{quiet:true}).acl}
+
+/* ---------- IoT tab ---------- */
+var seed=20261026;function rnd(){seed=(seed*1664525+1013904223)%4294967296;return seed/4294967296}
+var beds=[],sensors,paused=false,clock=0;
+function setupIot(){
+  for(var i=1;i<=6;i++)beds.push({id:i,hr:70+rnd()*16,spo2:96+rnd()*3,temp:36.6+rnd()*.6,hist:[],alarm:null,ev:null});
+  sensors=[{id:'smoke',name:'Smoke, ICU store',unit:'ppm',v:12,lim:150,alarm:false,ev:null},{id:'fridge',name:'Drug fridge',unit:'°C',v:4.2,lim:8,alarm:false,ev:null},{id:'o2',name:'Oxygen line',unit:'bar',v:4.1,lim:3.2,low:true,alarm:false,ev:null}];
+  $('#i-cardiac').addEventListener('click',function(){beds[2].ev='cardiac'});
+  $('#i-spo2').addEventListener('click',function(){beds[4].ev='spo2'});
+  $('#i-smoke').addEventListener('click',function(){sensors[0].ev=1});
+  $('#i-pause').addEventListener('click',function(){paused=!paused;this.textContent=paused?'Resume':'Pause'});
+  $('#beds').addEventListener('click',function(e){var b=e.target.closest('button[data-ack]');if(!b)return;var bd=beds[+b.dataset.ack];bd.ev=null;bd.alarm=null;bd.hr=78;bd.spo2=97.5;renderBeds()});
+  $('#sensors').addEventListener('click',function(e){var b=e.target.closest('button[data-sack]');if(!b)return;var s=sensors[+b.dataset.sack];s.ev=null;s.alarm=false;s.v=12;renderSensors()});
+  for(var t=0;t<30;t++)tick(true);
+  renderBeds();renderSensors();
+  setInterval(function(){if(!paused&&!document.hidden){tick();if(!$('#p-iot').hidden){renderBeds();renderSensors()}}},1000);
+  logEvent(null,'ICU-Monitor registered with HMS-Server. Six beds and three sensors online.',false);
+}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function tick(silent){
+  clock++;
+  beds.forEach(function(b){
+    if(b.ev==='cardiac'){b.hr+= (148-b.hr)*.25}else b.hr=clamp(b.hr+(rnd()-.5)*4+(78-b.hr)*.08,48,170);
+    if(b.ev==='spo2'){b.spo2+=(85-b.spo2)*.25}else b.spo2=clamp(b.spo2+(rnd()-.5)*.6+(97.5-b.spo2)*.1,80,100);
+    b.temp=clamp(b.temp+(rnd()-.5)*.05+(36.9-b.temp)*.05,35,41);
+    b.hist.push(b.hr);if(b.hist.length>40)b.hist.shift();
+    var a=null;if(b.hr>120)a='Heart rate '+Math.round(b.hr)+' bpm';else if(b.hr<50)a='Heart rate '+Math.round(b.hr)+' bpm';else if(b.spo2<90)a='SpO₂ '+b.spo2.toFixed(0)+'%';else if(b.temp>38.5)a='Temperature '+b.temp.toFixed(1)+' °C';
+    if(a&&!b.alarm&&!silent){b.alarm=a;sendAlarm('Bed '+b.id+': '+a)}
+    if(!a&&b.alarm&&!b.ev)b.alarm=null;
+  });
+  sensors.forEach(function(s){
+    if(s.id==='smoke'){s.v=s.ev?clamp(s.v+60,0,600):clamp(s.v+(rnd()-.5)*3,5,25)}
+    if(s.id==='fridge'){s.v=clamp(s.v+(rnd()-.5)*.2+(4.2-s.v)*.1,2,10)}
+    if(s.id==='o2'){s.v=clamp(s.v+(rnd()-.5)*.06+(4.1-s.v)*.1,3,5)}
+    var bad=s.low?s.v<s.lim:s.v>s.lim;
+    if(bad&&!s.alarm&&!silent){s.alarm=true;sendAlarm(s.name+': '+s.v.toFixed(s.id==='smoke'?0:1)+' '+s.unit+(s.id==='smoke'?'. Siren and sprinkler activated.':''))}
+  });
+}
+function sendAlarm(text){
+  var a=trace('MON','NUR','alert',{quiet:true}),b=trace('MON','SRV','http',{quiet:true});
+  var pa=a.ok?a.legs[0].nodes.map(function(x){return N[x].name}).join(' → ')+' (VLAN 60, switched)':'NOT delivered: '+a.reason;
+  var pb=b.ok?'ICU-Monitor → SW-ICU → SW-Core → R1 (VLAN 60 → 50) → SW-Core → HMS-Server':'NOT logged: '+b.reason;
+  logEvent(text,'Nurse station: '+pa+'\nServer log: '+pb,!(a.ok&&b.ok));
+}
+function hhmm(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0')}
+function logEvent(title,detail,bad){
+  var li=document.createElement('li');if(bad)li.className='bad';
+  li.innerHTML='<span class="t">'+hhmm()+'</span>'+(title?'<b>'+esc(title)+'</b>':'')+'<small>'+esc(detail).replace(/\n/g,'<br>')+'</small>';
+  var e=$('#events');e.insertBefore(li,e.firstChild);while(e.children.length>40)e.removeChild(e.lastChild);
+}
+function spark(h){if(h.length<2)return '';var mn=40,mx=170;return 'M'+h.map(function(v,i){return (i*(120/39)).toFixed(1)+' '+(32-(v-mn)/(mx-mn)*30).toFixed(1)}).join(' L')}
+function renderBeds(){
+  $('#beds').innerHTML=beds.map(function(b,i){var hrHi=b.hr>120||b.hr<50,sp=b.spo2<90,tp=b.temp>38.5;
+    return '<div class="bed'+(b.alarm?' alarm':'')+'"><h5>Bed '+b.id+(b.alarm?'<button class="btn danger" style="padding:2px 8px;font-size:12px" data-ack="'+i+'">Acknowledge</button>':'<span class="pill ok" style="font-size:11px">Stable</span>')+'</h5>'+
+    '<div class="vit"><div class="'+(hrHi?'hi':'')+'">HR<b>'+Math.round(b.hr)+'</b></div><div class="'+(sp?'hi':'')+'">SpO₂ %<b>'+b.spo2.toFixed(0)+'</b></div><div class="'+(tp?'hi':'')+'">°C<b>'+b.temp.toFixed(1)+'</b></div></div>'+
+    '<svg class="spark" viewBox="0 0 120 34" preserveAspectRatio="none" aria-hidden="true"><path d="'+spark(b.hist)+'"/></svg></div>'}).join('');
+}
+function renderSensors(){
+  $('#sensors').innerHTML=sensors.map(function(s,i){return '<div class="sensor'+(s.alarm?' alarm':'')+'"><div style="font-size:13px;color:var(--muted)">'+esc(s.name)+'</div><b style="color:'+(s.alarm?'var(--alert)':'var(--ink)')+'">'+s.v.toFixed(s.id==='smoke'?0:1)+'</b> <span style="font-size:13px">'+s.unit+'</span>'+(s.alarm?' <button class="btn danger" style="padding:2px 8px;font-size:12px" data-sack="'+i+'">Reset</button>':'')+'</div>'}).join('');
+}
+
+/* ---------- Failures tab ---------- */
+var RCOLS=[['Gateway','GW','ping'],['HMS website','SRV','http'],['DNS','SRV','dns'],['Nurse station','NUR','ping']];
+function renderReach(){
+  var h='<tr><th>Device</th>'+RCOLS.map(function(c){return '<th>'+c[0]+'</th>'}).join('')+'</tr>',lost=0;
+  ['REC','DOC','LAB','ADM','NUR','MON','PHN'].forEach(function(r){
+    h+='<tr><td><span class="vdot" style="--c:'+vc(N[r].vlan)+'"></span>'+esc(N[r].name)+'</td>';
+    RCOLS.forEach(function(c){if(c[1]===r){h+='<td style="color:var(--muted)">—</td>';return}var ok=trace(r,c[1],c[2],{quiet:true}).ok;if(!ok&&c[1]!=='NUR')lost++;h+='<td style="color:'+(ok?'var(--ok)':'var(--alert)')+';font-weight:700">'+(ok?'Yes':'No')+'</td>'});
+    h+='</tr>';
+  });
+  $('#f-reach').innerHTML=h;
+  var d=L.filter(function(l){return down[l.id]});
+  var nt=$('#f-note');
+  if(!d.length){nt.className='verdict ok';nt.innerHTML='Every device reaches its services.<small>Guest-Phone shows "No" only where the access list blocks it on purpose.</small>'}
+  else{nt.className='verdict bad';nt.innerHTML=d.length+' cable'+(d.length>1?'s':'')+' cut<small>'+esc(d.map(lname).join(', '))+'. Devices on the far side keep talking to neighbours on the same switch and VLAN, but lose everything that needs R1.</small>'}
+}
+function renderSpof(){
+  var saved=down;var out=[];
+  L.forEach(function(l){down={};down[l.id]=true;var c=0;['REC','DOC','LAB','ADM','NUR','MON','PHN'].forEach(function(h){if(!trace(h,'SRV','http',{quiet:true}).ok)c++});out.push([l,c])});
+  down=saved;out.sort(function(a,b){return b[1]-a[1]});
+  $('#f-spof').innerHTML=out.slice(0,7).map(function(o){return '<div class="bar"><span>'+esc(lname(o[0]))+'</span><span class="track"><span class="fill" style="display:block;width:'+(o[1]/7*100)+'%"></span></span><span class="n">'+o[1]+'</span></div>'}).join('')+
+  '<p style="font-size:14px;margin-top:8px">The R1 to SW-Core trunk takes down all seven devices, and losing it also loses DHCP. The upgrade path is a second router with HSRP and a second uplink to each floor switch.</p>';
+}
+function setupFail(){drawTopo($('#topo2'),'fail');$('#f-restore').addEventListener('click',function(){down={};refreshAll()});renderSpof()}
+
+/* ---------- static content ---------- */
+function renderPlan(){
+  var rows='<tr><th>VLAN</th><th>Department</th><th>Subnet</th><th>Gateway (R1)</th><th>DHCP range</th><th>Devices</th></tr>';
+  VIDS.forEach(function(v){var devs=HOSTS.filter(function(h){return N[h].vlan===v}).map(function(h){return N[h].name+' '+N[h].ip}).join(', ');
+    rows+='<tr><td><span class="vdot" style="--c:'+vc(v)+'"></span><b>'+v+'</b></td><td>'+esc(VLANS[v].name)+'</td><td class="mono">'+net(v)+'/24</td><td class="mono">'+gw(v)+'</td><td class="mono">'+(VLANS[v].pool?'.11 – .254':'static')+'</td><td>'+esc(devs)+'</td></tr>'});
+  $('#plan').innerHTML=rows;
+  var pr='<tr><th>Switch</th><th>Port</th><th>Mode</th><th>Device</th></tr>';
+  L.filter(function(l){return N[l.a].kind==='switch'}).forEach(function(l){var o=N[l.b];pr+='<tr><td>'+N[l.a].name+'</td><td class="mono">'+l.ap+'</td><td>'+(l.trunk?'Trunk':'Access '+o.vlan)+'</td><td>'+esc(o.name)+'</td></tr>'});
+  pr+='<tr><td>R1</td><td class="mono">G0/0</td><td>Trunk (subinterfaces)</td><td>SW-Core G0/1</td></tr>';
+  $('#ports').innerHTML=pr;
+}
+var CFG={
+'R1':['enable','configure terminal','hostname R1','no ip domain-lookup','banner motd # MediNet - authorised staff only #','interface GigabitEthernet0/0',' no shutdown'].concat(
+  [].concat.apply([],VIDS.map(function(v){return ['interface GigabitEthernet0/0.'+v,' description '+VLANS[v].name.replace(' / ','-').replace(' & ','-'),' encapsulation dot1Q '+v,' ip address '+gw(v)+' 255.255.255.0']})),
+  ['exit'],
+  VIDS.filter(function(v){return VLANS[v].pool}).map(function(v){return 'ip dhcp excluded-address 192.168.'+v+'.1 192.168.'+v+'.10'}),
+  [].concat.apply([],VIDS.filter(function(v){return VLANS[v].pool}).map(function(v){return ['ip dhcp pool '+VLANS[v].pool,' network '+net(v)+' 255.255.255.0',' default-router '+gw(v),' dns-server '+DNS_IP]})),
+  ['ip access-list extended GUEST_IN'],ACLS.GUEST_IN.rules.map(function(r){return ' '+r.txt}),
+  ['ip access-list extended RECORDS_OUT'],ACLS.RECORDS_OUT.rules.map(function(r){return ' '+r.txt}),
+  ['interface GigabitEthernet0/0.99',' ip access-group GUEST_IN in','interface GigabitEthernet0/0.40',' ip access-group RECORDS_OUT out','end','write memory']),
+'SW-Core':swCfg('SW-Core',['interface GigabitEthernet0/1',' switchport mode trunk','interface range FastEthernet0/23 - 24',' switchport mode trunk'],[[1,50],[3,40],[5,99]]),
+'SW-Ground':swCfg('SW-Ground',['interface FastEthernet0/24',' switchport mode trunk'],[[1,10],[2,20],[3,30]]),
+'SW-ICU':swCfg('SW-ICU',['interface FastEthernet0/24',' switchport mode trunk'],[[1,60],[2,60]])
+};
+function swCfg(name,trunk,acc){
+  var c=['enable','configure terminal','hostname '+name];
+  VIDS.forEach(function(v){c.push('vlan '+v,' name '+VLANS[v].name.toUpperCase().replace(/[^A-Z]+/g,'_').replace(/_$/,''))});
+  c=c.concat(trunk);acc.forEach(function(a){c.push('interface FastEthernet0/'+a[0],' switchport mode access',' switchport access vlan '+a[1])});
+  return c.concat(['end','write memory']);
+}
+function renderCfg(){
+  var box=$('#cfgs');
+  Object.keys(CFG).forEach(function(k,i){
+    var txt=CFG[k].join('\n');
+    var d=document.createElement('details');d.className='cfg';if(i===0)d.open=true;
+    d.innerHTML='<summary>'+k+' <span class="mono" style="font-size:13px;color:var(--muted)">'+CFG[k].length+' lines</span></summary><div class="inner"><button class="copy">Copy</button><pre class="code"></pre></div>';
+    d.querySelector('pre').textContent=txt;
+    d.querySelector('.copy').addEventListener('click',function(){var b=this;var done=function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,function(){selectPre(d)})}else selectPre(d)});
+    box.appendChild(d);
+  });
+  var srv=document.createElement('details');srv.className='cfg';
+  srv.innerHTML='<summary>HMS-Server and wireless <span class="mono" style="font-size:13px;color:var(--muted)">GUI settings</span></summary><div class="inner"><pre class="code"></pre></div>';
+  srv.querySelector('pre').textContent=['HMS-Server  Desktop > IP Configuration: static 192.168.50.10 / 255.255.255.0, gateway 192.168.50.1, DNS 192.168.50.10','HMS-Server  Services > DNS: On, A record hms.medinet.local -> 192.168.50.10','HMS-Server  Services > HTTP: On, index.html = MediNet HMS portal page','AP-Guest    Config > Port 1: SSID MediNet-Guest, WPA2-PSK, passphrase MediNet@2026','Guest-Phone Config > Wireless0: SSID MediNet-Guest, WPA2-PSK, same passphrase, IP: DHCP','PCs         Desktop > IP Configuration: DHCP'].join('\n');
+  box.appendChild(srv);
+  var tests=[
+    ['1','Doctor-PC: ipconfig','Address 192.168.20.11 from DHCP, gateway 192.168.20.1'],
+    ['2','Doctor-PC: ping 192.168.50.10','Replies: inter-VLAN routing works'],
+    ['3','Doctor-PC browser: hms.medinet.local','HMS portal loads: DNS and HTTP work'],
+    ['4','Guest-Phone browser: hms.medinet.local','Portal loads: GUEST_IN lines 20 and 30 allow DNS and web'],
+    ['5','Guest-Phone: ping 192.168.40.11','Destination host unreachable: GUEST_IN line 40'],
+    ['6','Reception-PC: ping 192.168.40.11','Destination host unreachable: RECORDS_OUT line 50'],
+    ['7','Doctor-PC: ping 192.168.40.11','Replies: RECORDS_OUT line 30 allows doctors'],
+    ['8','Nurse-Station: ping 192.168.60.12','Replies through SW-ICU only (same VLAN)'],
+    ['9','Guest-Phone: ping 192.168.50.10','Destination host unreachable: only web and DNS are allowed'],
+    ['10','R1: show access-lists','Match counters rise on the lines used above']
+  ];
+  $('#tests').innerHTML='<tr><th>#</th><th>Command</th><th>Expected result</th></tr>'+tests.map(function(t){return '<tr><td>'+t[0]+'</td><td class="mono">'+esc(t[1])+'</td><td>'+esc(t[2])+'</td></tr>'}).join('');
+}
+function selectPre(d){var r=document.createRange();r.selectNodeContents(d.querySelector('pre'));var s=window.getSelection();s.removeAllRanges();s.addRange(r)}
+var QA=[
+ ['Why did you use VLANs instead of one big network?','A VLAN is a separate broadcast domain. Splitting the hospital into seven VLANs keeps broadcasts small, stops a fault in one department from flooding the others, and lets the router apply security rules between departments.'],
+ ['What is a trunk port and what does 802.1Q do?','A trunk carries frames from many VLANs over one cable. IEEE 802.1Q inserts a 4-byte tag holding the 12-bit VLAN ID into each frame on the trunk so the next switch knows which VLAN it belongs to. Access ports send frames untagged.'],
+ ['What is router-on-a-stick?','Inter-VLAN routing using one physical router port split into subinterfaces, one per VLAN. Each subinterface has encapsulation dot1Q and the gateway address of its VLAN. Traffic goes up the trunk to the router and comes back down in another VLAN.'],
+ ['Explain DHCP DORA.','Discover (client broadcasts for a server), Offer (server proposes an address), Request (client broadcasts which offer it accepts), Acknowledge (server confirms the lease). It uses UDP ports 67 for the server and 68 for the client.'],
+ ['Why is no ip helper-address needed?','A DHCP discover is a broadcast and does not cross routers. Here R1 itself is the DHCP server and has a subinterface in every VLAN, so it receives every discover directly. A relay would be needed if the server were on the HMS-Server in VLAN 50.'],
+ ['Standard or extended ACL, and where did you place them?','Extended, because the rules depend on destination address and port. Extended ACLs go close to the source: GUEST_IN is inbound on the guest subinterface. RECORDS_OUT is outbound on the records subinterface so it protects that VLAN from every other VLAN with one list.'],
+ ['What does "established" mean in RECORDS_OUT?','It matches TCP segments with the ACK or RST bit set, which are replies to connections that were opened from the records VLAN. So Admin-PC can start a web session to the server and the replies come back, but nobody outside can open a new TCP connection into VLAN 40.'],
+ ['Why can a guest open the portal but not ping the server?','GUEST_IN line 30 permits only TCP port 80 to 192.168.50.10 and line 20 permits DNS. ICMP to the same host is caught by line 40, which denies everything else from 192.168.99.0/24 to the internal 192.168.0.0/16 range.'],
+ ['How does the nurse station get ICU alarms if the router fails?','The ICU monitor and nurse station are both in VLAN 60 on SW-ICU, so their traffic is switched and never reaches R1. The alarm still arrives; only the copy logged on the server is lost. The Link failures tab shows this.'],
+ ['What is ARP and when does it happen in your trace?','ARP maps an IP address to a MAC address. A host ARPs for the destination if it is on the same subnet, otherwise for its default gateway. R1 also ARPs for the final host before sending it the frame.'],
+ ['What is the single point of failure in this design?','The trunk between R1 and SW-Core, and R1 itself. If either fails, every inter-VLAN service and DHCP stops. A second router with HSRP and redundant uplinks running spanning tree would remove it.'],
+ ['Why /24 subnets for every department?','Each /24 gives 254 usable hosts, enough for growth, and matching the third octet to the VLAN ID makes troubleshooting easy. A real design could use VLSM to save addresses, for example a /27 for the 30-device ICU.']
+];
+function renderQA(){$('#qa').innerHTML=QA.map(function(q){return '<details><summary>'+esc(q[0])+'</summary><p>'+esc(q[1])+'</p></details>'}).join('')}
+
+/* ---------- tabs ---------- */
+function setupTabs(){
+  var tabs=document.querySelectorAll('.tabs [role=tab]');
+  tabs.forEach(function(t){t.addEventListener('click',function(){
+    tabs.forEach(function(x){x.setAttribute('aria-selected',x===t?'true':'false');$('#'+x.getAttribute('aria-controls')).hidden=x!==t});
+    if(t.id==='tab-fail')renderSpof();
+    if(t.id==='tab-iot'){renderBeds();renderSensors()}
+  })});
+}
+
+renderDepts();setupTabs();setupTrace();setupDhcp();setupAcl();setupIot();setupFail();renderPlan();renderCfg();renderQA();refreshAll();
+})();
+</script>

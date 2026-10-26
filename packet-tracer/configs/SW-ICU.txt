@@ -1,0 +1,28 @@
+enable
+configure terminal
+hostname SW-ICU
+vlan 10
+ name RECEPTION
+vlan 20
+ name DOCTORS_OPD
+vlan 30
+ name LABORATORY
+vlan 40
+ name ADMIN_RECORDS
+vlan 50
+ name SERVERS
+vlan 60
+ name ICU_IOT
+vlan 99
+ name GUEST_WIFI
+exit
+interface FastEthernet0/24
+ switchport mode trunk
+interface FastEthernet0/1
+ switchport mode access
+ switchport access vlan 60
+interface FastEthernet0/2
+ switchport mode access
+ switchport access vlan 60
+end
+write memory

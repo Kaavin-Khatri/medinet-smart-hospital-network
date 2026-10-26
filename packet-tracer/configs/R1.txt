@@ -1,0 +1,85 @@
+enable
+configure terminal
+hostname R1
+no ip domain-lookup
+banner motd # MediNet - authorised staff only #
+interface GigabitEthernet0/0
+ no shutdown
+interface GigabitEthernet0/0.10
+ description Reception
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+interface GigabitEthernet0/0.20
+ description Doctors-OPD
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+interface GigabitEthernet0/0.30
+ description Laboratory
+ encapsulation dot1Q 30
+ ip address 192.168.30.1 255.255.255.0
+interface GigabitEthernet0/0.40
+ description Admin-Records
+ encapsulation dot1Q 40
+ ip address 192.168.40.1 255.255.255.0
+interface GigabitEthernet0/0.50
+ description Servers
+ encapsulation dot1Q 50
+ ip address 192.168.50.1 255.255.255.0
+interface GigabitEthernet0/0.60
+ description ICU-IoT
+ encapsulation dot1Q 60
+ ip address 192.168.60.1 255.255.255.0
+interface GigabitEthernet0/0.99
+ description Guest-WiFi
+ encapsulation dot1Q 99
+ ip address 192.168.99.1 255.255.255.0
+exit
+ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp excluded-address 192.168.20.1 192.168.20.10
+ip dhcp excluded-address 192.168.30.1 192.168.30.10
+ip dhcp excluded-address 192.168.40.1 192.168.40.10
+ip dhcp excluded-address 192.168.60.1 192.168.60.10
+ip dhcp excluded-address 192.168.99.1 192.168.99.10
+ip dhcp pool RECEPTION
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.50.10
+ip dhcp pool DOCTORS
+ network 192.168.20.0 255.255.255.0
+ default-router 192.168.20.1
+ dns-server 192.168.50.10
+ip dhcp pool LAB
+ network 192.168.30.0 255.255.255.0
+ default-router 192.168.30.1
+ dns-server 192.168.50.10
+ip dhcp pool ADMIN
+ network 192.168.40.0 255.255.255.0
+ default-router 192.168.40.1
+ dns-server 192.168.50.10
+ip dhcp pool ICU
+ network 192.168.60.0 255.255.255.0
+ default-router 192.168.60.1
+ dns-server 192.168.50.10
+ip dhcp pool GUEST
+ network 192.168.99.0 255.255.255.0
+ default-router 192.168.99.1
+ dns-server 192.168.50.10
+exit
+ip access-list extended GUEST_IN
+ permit udp any any eq 67
+ permit udp 192.168.99.0 0.0.0.255 host 192.168.50.10 eq 53
+ permit tcp 192.168.99.0 0.0.0.255 host 192.168.50.10 eq 80
+ deny ip 192.168.99.0 0.0.0.255 192.168.0.0 0.0.255.255
+ permit ip any any
+ip access-list extended RECORDS_OUT
+ permit tcp any any established
+ permit icmp any any echo-reply
+ permit ip 192.168.20.0 0.0.0.255 any
+ permit ip 192.168.50.0 0.0.0.255 any
+ deny ip any any
+interface GigabitEthernet0/0.99
+ ip access-group GUEST_IN in
+interface GigabitEthernet0/0.40
+ ip access-group RECORDS_OUT out
+end
+write memory
